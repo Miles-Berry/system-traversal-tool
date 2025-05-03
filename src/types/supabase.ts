@@ -9,75 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      history_log: {
-        Row: {
-          changed_at: string
-          data: Json
-          entity_id: string
-          entity_type: string
-          id: string
-          version: number
-        }
-        Insert: {
-          changed_at?: string
-          data: Json
-          entity_id: string
-          entity_type: string
-          id?: string
-          version: number
-        }
-        Update: {
-          changed_at?: string
-          data?: Json
-          entity_id?: string
-          entity_type?: string
-          id?: string
-          version?: number
-        }
-        Relationships: []
-      }
       interfaces: {
         Row: {
-          attributes: Json | null
-          created_at: string
+          connection: string
+          created_at: string | null
+          directional: number
           id: string
-          name: string
-          source_system_id: string
-          target_system_id: string
-          updated_at: string
-          version: number
+          system1_id: string
+          system2_id: string
+          updated_at: string | null
         }
         Insert: {
-          attributes?: Json | null
-          created_at?: string
+          connection: string
+          created_at?: string | null
+          directional?: number
           id?: string
-          name: string
-          source_system_id: string
-          target_system_id: string
-          updated_at?: string
-          version?: number
+          system1_id: string
+          system2_id: string
+          updated_at?: string | null
         }
         Update: {
-          attributes?: Json | null
-          created_at?: string
+          connection?: string
+          created_at?: string | null
+          directional?: number
           id?: string
-          name?: string
-          source_system_id?: string
-          target_system_id?: string
-          updated_at?: string
-          version?: number
+          system1_id?: string
+          system2_id?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "interfaces_source_system_id_fkey"
-            columns: ["source_system_id"]
+            foreignKeyName: "interfaces_system1_id_fkey"
+            columns: ["system1_id"]
             isOneToOne: false
             referencedRelation: "systems"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "interfaces_target_system_id_fkey"
-            columns: ["target_system_id"]
+            foreignKeyName: "interfaces_system2_id_fkey"
+            columns: ["system2_id"]
             isOneToOne: false
             referencedRelation: "systems"
             referencedColumns: ["id"]
@@ -87,30 +57,27 @@ export type Database = {
       systems: {
         Row: {
           category: string
-          created_at: string
+          created_at: string | null
           id: string
           name: string
           parent_id: string | null
-          updated_at: string
-          version: number
+          updated_at: string | null
         }
         Insert: {
           category: string
-          created_at?: string
+          created_at?: string | null
           id?: string
           name: string
           parent_id?: string | null
-          updated_at?: string
-          version?: number
+          updated_at?: string | null
         }
         Update: {
           category?: string
-          created_at?: string
+          created_at?: string | null
           id?: string
           name?: string
           parent_id?: string | null
-          updated_at?: string
-          version?: number
+          updated_at?: string | null
         }
         Relationships: [
           {
