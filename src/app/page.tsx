@@ -7,8 +7,13 @@
 import dynamic from "next/dynamic";
 
 // Use dynamic import for the FlowDiagram component
-const FlowDiagram = dynamic(
-  () => import('@/components/FlowDiagram'),
+const SystemGraph = dynamic(
+  () => import('@/components/SystemGraph'),
+  { ssr: false }
+);
+
+const SystemDetails = dynamic(
+  () => import('@/components/SystemDetails'),
   { ssr: false }
 );
 
@@ -16,8 +21,15 @@ export default function Home() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Next.js + Supabase + React Flow</h1>
-      <div className="border rounded-lg overflow-hidden">
-        <FlowDiagram />
+      <div className="container flex flex-row justify-between">
+        <div className="border rounded-lg overflow-hidden w-[49%]">
+          <SystemGraph />
+        </div>
+        <div className="border rounded-lg overflow-hidden w-[49%] h-[49%]">
+          <div className="flex flex-col justify-start">
+            <SystemDetails systemId="00000000-0000-0000-0000-000000000001"/>
+          </div>
+        </div>
       </div>
     </div>
   );
