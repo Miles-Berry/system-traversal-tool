@@ -1,4 +1,8 @@
-# Next.js with Supabase Boilerplate
+# Visit the deployed site 
+
+https://system-traversal-tool.vercel.app/
+
+## Next.js with Supabase Boilerplate
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app) and integrated with [Supabase](https://supabase.com) and [React Flow](https://reactflow.dev/).
 
