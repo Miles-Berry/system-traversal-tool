@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getRevisionHistory, restoreRevision } from '@/lib/supabase';
+import { getRevisionHistory, restoreRevision, RevisionData } from '@/lib/supabase';
 
 interface RevisionHistoryProps {
   entityType: 'system' | 'interface';
@@ -14,8 +14,8 @@ interface Revision {
   entity_type: string;
   entity_id: string;
   operation: string;
-  previous_data: any;
-  new_data: any;
+  previous_data: RevisionData | null;
+  new_data: RevisionData | null;
   created_at: string;
   created_by: string;
 }
@@ -45,7 +45,13 @@ export default function RevisionHistory({
           console.error('Error fetching revision history:', error);
         } else {
           console.debug('Revision history fetched', { count: data?.length || 0 });
-          setRevisions(data || []);
+          setRevisions(
+            (data || []).map((item) => ({
+              ...item,
+              previous_data: item.previous_data as RevisionData | null,
+              new_data: item.new_data as RevisionData | null,
+            }))
+          );
         }
       } catch (error) {
         console.error('Unexpected error:', error);

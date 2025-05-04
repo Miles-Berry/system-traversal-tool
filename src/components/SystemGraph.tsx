@@ -1,9 +1,8 @@
-'use client';
-
 import { useCallback, useState, useEffect } from 'react';
 import {
   ReactFlow,
-  MiniMap,
+  // Remove unused import
+  // MiniMap,
   Controls,
   Background,
   useNodesState,
@@ -80,13 +79,14 @@ interface System {
   parent_id?: string | null;
 }
 
-interface Interface {
-  id: string;
-  system1_id: string;
-  system2_id: string;
-  connection: string;
-  directional: number;
-}
+// // Remove unused Interface declaration
+// interface Interface {
+//   id: string;
+//   system1_id: string;
+//   system2_id: string;
+//   connection: string;
+//   directional: number;
+// }
 
 export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<{ label: string; category: string; type: string }>>([]);
@@ -307,10 +307,11 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
     }
   }, [systemId, setNodes, setEdges]);
 
+  // Fix the missing dependency warning
   useEffect(() => {
     console.debug('SystemGraph component mounted or systemId changed', { systemId });
     fetchSystemData();
-  }, [fetchSystemData]);
+  }, [fetchSystemData, systemId]);
 
   // Handle connections between nodes
   const onConnect = useCallback(

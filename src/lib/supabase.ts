@@ -1,6 +1,3 @@
-/**
- * Database utilities for transactions and revision history
- */
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '@/types/supabase';
 
@@ -10,6 +7,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
 
 // Create Supabase client
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+
+// Define types for revision data
+export interface RevisionData {
+  [key: string]: string | number | boolean | null | RevisionData;
+}
 
 /**
  * Execute a multi-statement client-side transaction
@@ -40,8 +42,8 @@ export async function createRevision(
   entityType: 'system' | 'interface',
   entityId: string,
   operation: 'create' | 'update' | 'delete',
-  previousData: any | null,
-  newData: any | null,
+  previousData: RevisionData | null, // Replace any with a proper type
+  newData: RevisionData | null, // Replace any with a proper type
   userId: string = 'anonymous'
 ) {
   console.debug('Creating revision record', {

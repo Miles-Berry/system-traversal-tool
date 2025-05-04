@@ -4,8 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   createInterfaceWithTransaction, 
   updateInterfaceWithTransaction, 
-  deleteInterfaceWithTransaction,
-  getRevisionHistory
+  deleteInterfaceWithTransaction
 } from '@/lib/supabase';
 import RevisionHistory from './RevisionHistory';
 
