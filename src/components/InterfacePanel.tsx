@@ -10,6 +10,7 @@ interface System {
   id: string;
   name: string;
   category: string;
+  depth?: number;
 }
 
 interface Interface {
@@ -26,7 +27,8 @@ interface Interface {
 export default function InterfacePanel({ systemId }: InterfacePanelProps) {
   const [interfaces, setInterfaces] = useState<Interface[]>([]);
   const [loading, setLoading] = useState(true);
-  const [descendantSystems, setDescendantSystems] = useState<System[]>([]);
+  const [directChildren, setDirectChildren] = useState<System[]>([]);
+  const [grandchildren, setGrandchildren] = useState<System[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentInterface, setCurrentInterface] = useState<Interface | null>(null);
@@ -37,28 +39,60 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
     directional: 0
   });
 
-  // Recursively fetch all descendant systems
-  const fetchDescendantSystems = useCallback(async (parentId: string): Promise<System[]> => {
-    const { data, error } = await supabase
-      .from('systems')
-      .select('*')
-      .eq('parent_id', parentId);
+  // Fetch direct children and grandchildren
+  const fetchDescendants = useCallback(async () => {
+    try {
+      // Fetch direct children
+      const { data: children, error: childrenError } = await supabase
+        .from('systems')
+        .select('*')
+        .eq('parent_id', systemId);
 
-    if (error) {
-      console.error('Error fetching descendant systems:', error);
+      if (childrenError) {
+        console.error('Error fetching children:', childrenError);
+        return;
+      }
+
+      // Add depth information 
+      const childrenWithDepth = children.map(child => ({
+        ...child,
+        depth: 1
+      }));
+      
+      setDirectChildren(childrenWithDepth);
+
+      // Fetch grandchildren for each direct child
+      let allGrandchildren: System[] = [];
+      
+      for (const child of children) {
+        const { data: grandchildData, error: grandchildrenError } = await supabase
+          .from('systems')
+          .select('*')
+          .eq('parent_id', child.id);
+          
+        if (grandchildrenError) {
+          console.error(`Error fetching grandchildren for ${child.id}:`, grandchildrenError);
+          continue;
+        }
+        
+        if (grandchildData && grandchildData.length > 0) {
+          const grandchildrenWithDepth = grandchildData.map(grandchild => ({
+            ...grandchild,
+            depth: 2
+          }));
+          
+          allGrandchildren = [...allGrandchildren, ...grandchildrenWithDepth];
+        }
+      }
+      
+      setGrandchildren(allGrandchildren);
+      
+      return [...childrenWithDepth, ...allGrandchildren];
+    } catch (error) {
+      console.error('Unexpected error:', error);
       return [];
     }
-
-    let allDescendants: System[] = [...data];
-    
-    // Recursively fetch descendants for each direct child
-    for (const system of data) {
-      const childDescendants = await fetchDescendantSystems(system.id);
-      allDescendants = [...allDescendants, ...childDescendants];
-    }
-
-    return allDescendants;
-  }, []);
+  }, [systemId]);
 
   // Fetch all interfaces related to the current system and its descendants
   const fetchInterfaces = useCallback(async () => {
@@ -66,11 +100,10 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
       setLoading(true);
       
       // Get all descendant systems
-      const descendants = await fetchDescendantSystems(systemId);
-      setDescendantSystems(descendants);
+      const descendants = await fetchDescendants();
       
       // Get all relevant system IDs (current + descendants)
-      const allSystemIds = [systemId, ...descendants.map(s => s.id)];
+      const allSystemIds = [systemId, ...(descendants || []).map(s => s.id)];
       
       // Fetch interfaces where system1 or system2 is in our list
       const { data: interfacesData, error: interfacesError } = await supabase
@@ -112,7 +145,7 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
     } finally {
       setLoading(false);
     }
-  }, [systemId, fetchDescendantSystems]);
+  }, [systemId, fetchDescendants]);
 
   useEffect(() => {
     fetchInterfaces();
@@ -222,6 +255,22 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
     setIsEditModalOpen(true);
   };
 
+  // Get current system details for dropdowns
+  const fetchCurrentSystem = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('systems')
+      .select('*')
+      .eq('id', systemId)
+      .single();
+      
+    if (error) {
+      console.error('Error fetching current system:', error);
+      return null;
+    }
+    
+    return data;
+  }, [systemId]);
+
   // Get all available systems for dropdowns (current + descendants + connected external systems)
   const getAvailableSystems = () => {
     const connectedExternalSystems: System[] = [];
@@ -229,7 +278,8 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
     // Find external systems (those that are connected but not in our descendant list)
     interfaces.forEach(iface => {
       // For system1
-      if (!descendantSystems.some(s => s.id === iface.system1_id) && 
+      if (!directChildren.some(s => s.id === iface.system1_id) && 
+          !grandchildren.some(s => s.id === iface.system1_id) &&
           iface.system1_id !== systemId &&
           !connectedExternalSystems.some(s => s.id === iface.system1_id) &&
           iface.system1) {
@@ -237,7 +287,8 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
       }
       
       // For system2
-      if (!descendantSystems.some(s => s.id === iface.system2_id) && 
+      if (!directChildren.some(s => s.id === iface.system2_id) && 
+          !grandchildren.some(s => s.id === iface.system2_id) &&
           iface.system2_id !== systemId &&
           !connectedExternalSystems.some(s => s.id === iface.system2_id) &&
           iface.system2) {
@@ -245,16 +296,54 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
       }
     });
     
+    // Find the current system in the interfaces
+    const currentSystemData = interfaces.find(
+      iface => iface.system1_id === systemId || iface.system2_id === systemId
+    );
+    
     // Get current system
     const currentSystem: System = {
       id: systemId,
-      name: 'Current System', // This is a placeholder - we should fetch the actual name
-      category: ''
+      name: (currentSystemData?.system1_id === systemId && currentSystemData?.system1?.name) ||
+            (currentSystemData?.system2_id === systemId && currentSystemData?.system2?.name) ||
+            'Current System',
+      category: (currentSystemData?.system1_id === systemId && currentSystemData?.system1?.category) ||
+               (currentSystemData?.system2_id === systemId && currentSystemData?.system2?.category) ||
+               ''
     };
     
     // Combine all systems
-    return [currentSystem, ...descendantSystems, ...connectedExternalSystems];
+    return [currentSystem, ...directChildren, ...grandchildren, ...connectedExternalSystems];
   };
+
+  // Group interfaces by level of relationship
+  const groupInterfacesByLevel = () => {
+    const directInterfaces: Interface[] = [];
+    const childrenInterfaces: Interface[] = [];
+    const grandchildrenInterfaces: Interface[] = [];
+    
+    interfaces.forEach(iface => {
+      // Direct interfaces involve the current system
+      if (iface.system1_id === systemId || iface.system2_id === systemId) {
+        directInterfaces.push(iface);
+      }
+      // Children interfaces involve direct children but not the current system
+      else if (
+        (directChildren.some(child => child.id === iface.system1_id) || 
+         directChildren.some(child => child.id === iface.system2_id))
+      ) {
+        childrenInterfaces.push(iface);
+      }
+      // Grandchildren interfaces only involve grandchildren
+      else {
+        grandchildrenInterfaces.push(iface);
+      }
+    });
+    
+    return { directInterfaces, childrenInterfaces, grandchildrenInterfaces };
+  };
+
+  const { directInterfaces, childrenInterfaces, grandchildrenInterfaces } = groupInterfacesByLevel();
 
   return (
     <div className="w-full mt-4 border rounded-lg p-3">
@@ -274,57 +363,179 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
         <div className="p-4 text-center">No interfaces found</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From System</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To System</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connection</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {interfaces.map((iface) => (
-                <tr key={iface.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col">
-                      <div className="text-sm font-medium text-gray-900">{iface.system1?.name || 'Unknown'}</div>
-                      <div className="text-sm text-gray-500">{iface.system1?.category || ''}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col">
-                      <div className="text-sm font-medium text-gray-900">{iface.system2?.name || 'Unknown'}</div>
-                      <div className="text-sm text-gray-500">{iface.system2?.category || ''}</div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {iface.connection}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {iface.directional ? 'Directional' : 'Bidirectional'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => openEditModal(iface)}
-                        className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteInterface(iface.id)}
-                        className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Direct interfaces section */}
+          {directInterfaces.length > 0 && (
+            <>
+              <h3 className="text-md font-bold mt-3 mb-2">Direct Interfaces</h3>
+              <table className="min-w-full divide-y divide-gray-200 mb-6">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From System</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To System</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connection</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {directInterfaces.map((iface) => (
+                    <tr key={iface.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <div className="text-sm font-medium text-gray-900">{iface.system1?.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{iface.system1?.category || ''}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <div className="text-sm font-medium text-gray-900">{iface.system2?.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{iface.system2?.category || ''}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {iface.connection}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {iface.directional ? 'Directional' : 'Bidirectional'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEditModal(iface)}
+                            className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInterface(iface.id)}
+                            className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          
+          {/* Children interfaces section */}
+          {childrenInterfaces.length > 0 && (
+            <>
+              <h3 className="text-md font-bold mt-3 mb-2">Child System Interfaces</h3>
+              <table className="min-w-full divide-y divide-gray-200 mb-6">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From System</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To System</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connection</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {childrenInterfaces.map((iface) => (
+                    <tr key={iface.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <div className="text-sm font-medium text-gray-900">{iface.system1?.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{iface.system1?.category || ''}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <div className="text-sm font-medium text-gray-900">{iface.system2?.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{iface.system2?.category || ''}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {iface.connection}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {iface.directional ? 'Directional' : 'Bidirectional'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEditModal(iface)}
+                            className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInterface(iface.id)}
+                            className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          
+          {/* Grandchildren interfaces section */}
+          {grandchildrenInterfaces.length > 0 && (
+            <>
+              <h3 className="text-md font-bold mt-3 mb-2">Grandchild System Interfaces</h3>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">From System</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">To System</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Connection</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {grandchildrenInterfaces.map((iface) => (
+                    <tr key={iface.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <div className="text-sm font-medium text-gray-900">{iface.system1?.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{iface.system1?.category || ''}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <div className="text-sm font-medium text-gray-900">{iface.system2?.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{iface.system2?.category || ''}</div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {iface.connection}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {iface.directional ? 'Directional' : 'Bidirectional'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEditModal(iface)}
+                            className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteInterface(iface.id)}
+                            className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </div>
       )}
 

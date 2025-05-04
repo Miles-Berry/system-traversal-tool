@@ -13,14 +13,17 @@ interface System {
   category: string;
   parent_id?: string | null;
   created_at: string | null;
+  depth?: number; // Added for hierarchy visualization
 }
 
 export default function SystemDetails(props: SystemDetailsProps) {
-  const [systems, setSystems] = useState<System[] | null>(null);
+  const [directChildren, setDirectChildren] = useState<System[] | null>(null);
+  const [allDescendants, setAllDescendants] = useState<System[] | null>(null);
   const [currentSystem, setCurrentSystem] = useState<System | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedView, setSelectedView] = useState<'direct' | 'all'>('direct');
   const [formData, setFormData] = useState({
     name: '',
     category: ''
@@ -45,21 +48,55 @@ export default function SystemDetails(props: SystemDetailsProps) {
     }
   }, [props.systemId]);
 
-  // Fetch subsystems
-  const fetchSystems = useCallback(async () => {
+  // Fetch children and grandchildren with depth information
+  const fetchDescendants = useCallback(async () => {
     try {
-      setLoading(true);
-      const { data, error } = await supabase
+      // Fetch direct children
+      const { data: children, error: childrenError } = await supabase
         .from('systems')
         .select('*')
-        .eq('parent_id', props.systemId)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching systems:', error);
-      } else {
-        setSystems(data);
+        .eq('parent_id', props.systemId);
+
+      if (childrenError) {
+        console.error('Error fetching children:', childrenError);
+        return;
       }
+
+      // Add depth information to direct children
+      const childrenWithDepth = children.map(child => ({
+        ...child,
+        depth: 1
+      }));
+      
+      setDirectChildren(childrenWithDepth);
+
+      // Fetch grandchildren for each direct child
+      let allGrandchildren: System[] = [];
+      
+      for (const child of children) {
+        const { data: grandchildren, error: grandchildrenError } = await supabase
+          .from('systems')
+          .select('*')
+          .eq('parent_id', child.id);
+          
+        if (grandchildrenError) {
+          console.error(`Error fetching grandchildren for ${child.id}:`, grandchildrenError);
+          continue;
+        }
+        
+        if (grandchildren && grandchildren.length > 0) {
+          // Add depth information to grandchildren
+          const grandchildrenWithDepth = grandchildren.map(grandchild => ({
+            ...grandchild,
+            depth: 2
+          }));
+          
+          allGrandchildren = [...allGrandchildren, ...grandchildrenWithDepth];
+        }
+      }
+      
+      // Combine direct children and grandchildren for the "all" view
+      setAllDescendants([...childrenWithDepth, ...allGrandchildren]);
     } catch (error) {
       console.error('Unexpected error:', error);
     } finally {
@@ -68,9 +105,10 @@ export default function SystemDetails(props: SystemDetailsProps) {
   }, [props.systemId]);
 
   useEffect(() => {
+    setLoading(true);
     fetchCurrentSystem();
-    fetchSystems();
-  }, [fetchCurrentSystem, fetchSystems]);
+    fetchDescendants();
+  }, [fetchCurrentSystem, fetchDescendants]);
 
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,7 +141,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
         setFormData({ name: '', category: '' });
         setIsAddModalOpen(false);
         // Fetch updated list
-        fetchSystems();
+        fetchDescendants();
       }
     } catch (error) {
       console.error('Unexpected error:', error);
@@ -133,7 +171,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
         setFormData({ name: '', category: '' });
         setIsEditModalOpen(false);
         // Fetch updated list
-        fetchSystems();
+        fetchDescendants();
       }
     } catch (error) {
       console.error('Unexpected error:', error);
@@ -153,7 +191,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
           console.error('Error deleting system:', error);
         } else {
           // Fetch updated list
-          fetchSystems();
+          fetchDescendants();
         }
       } catch (error) {
         console.error('Unexpected error:', error);
@@ -200,6 +238,49 @@ export default function SystemDetails(props: SystemDetailsProps) {
     setIsEditModalOpen(true);
   };
 
+  // Get indentation based on depth
+  const getIndentation = (depth: number = 0) => {
+    return `pl-${Math.min(depth * 4, 8)}`;
+  };
+
+  // Render a system item
+  const renderSystemItem = (system: System) => (
+    <li 
+      key={system.id} 
+      className={`flex justify-between items-center p-2 border-b last:border-b-0 hover:bg-gray-100 cursor-pointer ${system.depth ? getIndentation(system.depth) : ''}`}
+      onClick={() => handleSystemClick(system)}
+    >
+      <div className="flex flex-col">
+        <div className="flex items-center">
+          {system.depth === 2 && (
+            <span className="mr-2 text-gray-400">
+              —→
+            </span>
+          )}
+          <span className="text-md font-bold">{system.name}</span>
+        </div>
+        <span className="text-sm italic">{system.category}</span>
+      </div>
+      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={(e) => openEditModal(system, e)}
+          className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
+        >
+          Edit
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteSystem(system.id);
+          }}
+          className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
+        >
+          Delete
+        </button>
+      </div>
+    </li>
+  );
+
   return (
     <div className="w-full h-[350px]">
       <div className="flex justify-between items-center">
@@ -218,10 +299,27 @@ export default function SystemDetails(props: SystemDetailsProps) {
       <h4 className="mx-3 text-md italic mt-0 mb-3">
         {currentSystem?.category || 'Category'}
       </h4>
-      <div className="container flex flex-row justify-between">
-        <h3 className="mx-3 text-lg font-bold">
-          Subsystems
-        </h3>
+      
+      <div className="container flex flex-row justify-between items-center mb-2">
+        <div className="flex mx-3">
+          <h3 className="text-lg font-bold mr-4">
+            Subsystems
+          </h3>
+          <div className="flex space-x-2 text-sm">
+            <button
+              onClick={() => setSelectedView('direct')}
+              className={`px-2 py-1 rounded ${selectedView === 'direct' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            >
+              Direct Children
+            </button>
+            <button
+              onClick={() => setSelectedView('all')}
+              className={`px-2 py-1 rounded ${selectedView === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+            >
+              All Descendants
+            </button>
+          </div>
+        </div>
         <button
           onClick={() => setIsAddModalOpen(true)}
           className="mx-3 text-md font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
@@ -229,41 +327,22 @@ export default function SystemDetails(props: SystemDetailsProps) {
           Add Child
         </button>
       </div>
+      
       <ul className="border rounded-md overflow-y-scroll h-[233px] mx-3">
         {loading ? (
           <li className="p-2">Loading...</li>
-        ) : !systems?.length ? (
-          <li className="p-2">No subsystems found</li>
+        ) : selectedView === 'direct' ? (
+          !directChildren?.length ? (
+            <li className="p-2">No direct subsystems found</li>
+          ) : (
+            directChildren.map(system => renderSystemItem(system))
+          )
         ) : (
-          systems.map((system) => (
-            <li 
-              key={system.id} 
-              className="flex justify-between items-center p-2 border-b last:border-b-0 hover:bg-gray-100 cursor-pointer"
-              onClick={() => handleSystemClick(system)}
-            >
-              <div className="flex flex-col">
-                <span className="text-md font-bold">{system.name}</span>
-                <span className="text-sm italic">{system.category}</span>
-              </div>
-              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={(e) => openEditModal(system, e)}
-                  className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeleteSystem(system.id);
-                  }}
-                  className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))
+          !allDescendants?.length ? (
+            <li className="p-2">No descendant systems found</li>
+          ) : (
+            allDescendants.map(system => renderSystemItem(system))
+          )
         )}
       </ul>
 
