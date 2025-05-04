@@ -311,6 +311,21 @@ export default function SystemDetails(props: SystemDetailsProps) {
           </h4>
         </div>
         <div className="flex gap-2">
+            {currentSystem && (
+            <button 
+                onClick={() => {
+                console.debug('Opening edit modal for current system', { id: currentSystem.id });
+                setFormData({
+                    name: currentSystem.name,
+                    category: currentSystem.category
+                });
+                setIsEditModalOpen(true);
+                }}
+                className="text-xs font-medium border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
+            >
+                Edit System
+            </button>
+            )}
           {currentSystem && (
             <button 
               onClick={() => setIsHistoryModalOpen(true)}
