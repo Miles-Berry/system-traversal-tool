@@ -23,6 +23,8 @@ interface System {
 }
 
 export default function SystemDetails(props: SystemDetailsProps) {
+  console.debug('Rendering SystemDetails', { systemId: props.systemId });
+  
   const [directChildren, setDirectChildren] = useState<System[] | null>(null);
   const [allDescendants, setAllDescendants] = useState<System[] | null>(null);
   const [currentSystem, setCurrentSystem] = useState<System | null>(null);
@@ -38,6 +40,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
   // Fetch current system details
   const fetchCurrentSystem = useCallback(async () => {
     try {
+      console.debug('Fetching current system', { id: props.systemId });
       const { data, error } = await supabase
         .from('systems')
         .select('*')
@@ -57,6 +60,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
   // Fetch children and grandchildren with depth information
   const fetchDescendants = useCallback(async () => {
     try {
+      console.debug('Fetching descendants', { parentId: props.systemId });
       // Fetch direct children
       const { data: children, error: childrenError } = await supabase
         .from('systems')
@@ -75,6 +79,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
       }));
       
       setDirectChildren(childrenWithDepth);
+      console.debug('Direct children fetched', { count: childrenWithDepth.length });
 
       // Fetch grandchildren for each direct child
       let allGrandchildren: System[] = [];
@@ -103,6 +108,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
       
       // Combine direct children and grandchildren for the "all" view
       setAllDescendants([...childrenWithDepth, ...allGrandchildren]);
+      console.debug('All descendants fetched', { count: childrenWithDepth.length + allGrandchildren.length });
     } catch (error) {
       console.error('Unexpected error:', error);
     } finally {
@@ -199,6 +205,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
 
   // Handle system click for navigation
   const handleSystemClick = (system: System) => {
+    console.debug('System clicked for navigation', { id: system.id, name: system.name });
     if (props.onSystemSelect) {
       props.onSystemSelect(system.id, system.name);
     }
@@ -208,6 +215,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
   const handleGoToParent = async () => {
     if (currentSystem?.parent_id && props.onSystemSelect) {
       try {
+        console.debug('Navigating to parent system', { parentId: currentSystem.parent_id });
         const { data, error } = await supabase
           .from('systems')
           .select('*')
@@ -228,6 +236,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
   // Open edit modal with system data
   const openEditModal = (system: System, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering the row click
+    console.debug('Opening edit modal', { id: system.id, name: system.name });
     setCurrentSystem(system);
     setFormData({
       name: system.name,
@@ -238,31 +247,31 @@ export default function SystemDetails(props: SystemDetailsProps) {
 
   // Get indentation based on depth
   const getIndentation = (depth: number = 0) => {
-    return `pl-${Math.min(depth * 4, 8)}`;
+    return `pl-${Math.min(depth * 3, 6)}`;
   };
 
   // Render a system item
   const renderSystemItem = (system: System) => (
     <li 
       key={system.id} 
-      className={`flex justify-between items-center p-2 border-b last:border-b-0 hover:bg-gray-100 cursor-pointer ${system.depth ? getIndentation(system.depth) : ''}`}
+      className={`flex justify-between items-center py-1 px-2 border-b last:border-b-0 hover:bg-gray-600 cursor-pointer ${system.depth ? getIndentation(system.depth) : ''}`}
       onClick={() => handleSystemClick(system)}
     >
       <div className="flex flex-col">
         <div className="flex items-center">
           {system.depth === 2 && (
-            <span className="mr-2 text-gray-400">
-              —→
+            <span className="mr-1 text-gray-400 text-sm">
+              →
             </span>
           )}
-          <span className="text-md font-bold">{system.name}</span>
+          <span className="text-sm font-medium">{system.name}</span>
         </div>
-        <span className="text-sm italic">{system.category}</span>
+        <span className="text-xs italic text-gray-500">{system.category}</span>
       </div>
-      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={(e) => openEditModal(system, e)}
-          className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
+          className="text-xs font-medium border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:ring-opacity-50 px-1.5 py-0.5"
         >
           Edit
         </button>
@@ -271,7 +280,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
             e.stopPropagation();
             handleDeleteSystem(system.id);
           }}
-          className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
+          className="text-xs font-medium border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-1 focus:ring-red-500 focus:ring-opacity-50 px-1.5 py-0.5"
         >
           Delete
         </button>
@@ -280,64 +289,66 @@ export default function SystemDetails(props: SystemDetailsProps) {
   );
 
   return (
-    <div className="w-full h-[350px]">
-      <div className="flex justify-between items-center">
-        <h2 className="mx-3 mt-3 text-xl font-bold">
-          {currentSystem?.name || 'System Details'}
-        </h2>
+    <div className="w-full h-[250px]">
+      <div className="flex justify-between items-center p-2 border-b">
+        <div>
+          <h2 className="text-lg font-bold">
+            {currentSystem?.name || 'System Details'}
+          </h2>
+          <h4 className="text-xs italic text-gray-500">
+            {currentSystem?.category || 'Category'}
+          </h4>
+        </div>
         {currentSystem?.parent_id && (
           <button 
             onClick={handleGoToParent}
-            className="mx-3 mt-3 text-sm border rounded-sm bg-gray-200 hover:bg-gray-300 px-2 py-1"
+            className="text-xs border rounded-sm hover:bg-gray-300 px-2 py-1"
           >
             Go to Parent
           </button>
         )}
       </div>
-      <h4 className="mx-3 text-md italic mt-0 mb-3">
-        {currentSystem?.category || 'Category'}
-      </h4>
       
-      <div className="container flex flex-row justify-between items-center mb-2">
-        <div className="flex mx-3">
-          <h3 className="text-lg font-bold mr-4">
+      <div className="flex justify-between items-center px-2 py-1">
+        <div className="flex items-center">
+          <h3 className="text-sm font-bold mr-2">
             Subsystems
           </h3>
-          <div className="flex space-x-2 text-sm">
+          <div className="flex space-x-1 text-xs">
             <button
               onClick={() => setSelectedView('direct')}
-              className={`px-2 py-1 rounded ${selectedView === 'direct' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+              className={`px-1.5 py-0.5 rounded ${selectedView === 'direct' ? 'bg-blue-500 text-white' : 'bg-gray-600'}`}
             >
-              Direct Children
+              Direct
             </button>
             <button
               onClick={() => setSelectedView('all')}
-              className={`px-2 py-1 rounded ${selectedView === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+              className={`px-1.5 py-0.5 rounded ${selectedView === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-600'}`}
             >
-              All Descendants
+              All
             </button>
           </div>
         </div>
         <button
           onClick={() => setIsAddModalOpen(true)}
-          className="mx-3 text-md font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
+          className="text-xs font-medium border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
         >
           Add Child
         </button>
       </div>
       
-      <ul className="border rounded-md overflow-y-scroll h-[233px] mx-3">
+      <ul className="border-t overflow-y-auto max-h-full">
         {loading ? (
-          <li className="p-2">Loading...</li>
+          <li className="p-2 text-sm">Loading...</li>
         ) : selectedView === 'direct' ? (
           !directChildren?.length ? (
-            <li className="p-2">No direct subsystems found</li>
+            <li className="p-2 text-sm text-gray-500">No direct subsystems found</li>
           ) : (
             directChildren.map(system => renderSystemItem(system))
           )
         ) : (
           !allDescendants?.length ? (
-            <li className="p-2">No descendant systems found</li>
+            <li className="p-2 text-sm text-gray-500">No descendant systems found</li>
           ) : (
             allDescendants.map(system => renderSystemItem(system))
           )
@@ -347,7 +358,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
       {/* Add Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-md w-full max-w-md">
+          <div className="p-4 rounded-md w-full max-w-md">
             <h3 className="text-lg font-bold mb-4">Add New Subsystem</h3>
             <form onSubmit={handleAddSystem}>
               <div className="mb-4">
@@ -379,13 +390,13 @@ export default function SystemDetails(props: SystemDetailsProps) {
                     setFormData({ name: '', category: '' });
                     setIsAddModalOpen(false);
                   }}
-                  className="px-4 py-2 border rounded"
+                  className="px-3 py-1.5 border rounded"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded"
+                  className="px-3 py-1.5 bg-blue-500 text-white rounded"
                 >
                   Add
                 </button>
@@ -398,8 +409,8 @@ export default function SystemDetails(props: SystemDetailsProps) {
       {/* Edit Modal */}
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-md w-full max-w-md">
-            <h3 className="text-lg font-bold mb-4">Edit Subsystem</h3>
+          <div className="p-4 rounded-md w-full max-w-md">
+            <h3 className="text-lg font-bold mb-4">Edit System</h3>
             <form onSubmit={handleEditSystem}>
               <div className="mb-4">
                 <label className="block text-sm font-medium mb-1">Name</label>
@@ -431,13 +442,13 @@ export default function SystemDetails(props: SystemDetailsProps) {
                     setFormData({ name: '', category: '' });
                     setIsEditModalOpen(false);
                   }}
-                  className="px-4 py-2 border rounded"
+                  className="px-3 py-1.5 border rounded"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded"
+                  className="px-3 py-1.5 bg-blue-500 text-white rounded"
                 >
                   Update
                 </button>

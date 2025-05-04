@@ -18,7 +18,55 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { supabase, createInterfaceWithTransaction } from '@/lib/supabase';
+import dagre from 'dagre';
 
+// Helper function for auto-layout using dagre
+const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
+  console.debug('Calculating auto-layout with dagre', { nodes, edges, direction });
+  
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+  
+  // Configure the graph
+  const nodeWidth = 180;
+  const nodeHeight = 40;
+  dagreGraph.setGraph({ rankdir: direction });
+
+  // Add nodes to dagre graph
+  nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+  });
+
+  // Add edges to dagre graph
+  edges.forEach((edge) => {
+    dagreGraph.setEdge(edge.source, edge.target);
+  });
+
+  // Calculate the layout
+  dagre.layout(dagreGraph);
+
+  // Apply the layout to our nodes
+  const layoutedNodes = nodes.map((node) => {
+      const nodeWithPosition = dagreGraph.node(node.id);
+      
+      console.debug(`Node ${node.id} positioned at (${nodeWithPosition.x}, ${nodeWithPosition.y})`);
+      
+      return {
+        ...node,
+        position: {
+          x: nodeWithPosition.x - nodeWidth / 2,
+          y: nodeWithPosition.y - nodeHeight / 2,
+        },
+        data: {
+          label: node.data.label as string,
+          category: node.data.category as string,
+          type: node.data.type as string,
+        },
+      };
+    });
+
+  return { nodes: layoutedNodes, edges };
+};
 
 interface SystemGraphProps {
   systemId: string;
@@ -50,6 +98,7 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
   const fetchSystemData = useCallback(async () => {
     try {
       setLoading(true);
+      console.debug('Fetching system data', { systemId });
       
       // Fetch current system
       const { data: systemData, error: systemError } = await supabase
@@ -64,6 +113,7 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
       }
       
       setCurrentSystem(systemData);
+      console.debug('Current system data loaded', systemData);
       
       // Fetch direct children (subsystems)
       const { data: childSystems, error: childrenError } = await supabase
@@ -75,6 +125,8 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
         console.error('Error fetching children:', childrenError);
         return;
       }
+
+      console.debug('Fetched children systems', { count: childSystems.length });
       
       // Prepare to fetch grandchildren for each child
       let allGrandchildren: System[] = [];
@@ -95,6 +147,8 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
           allGrandchildren = [...allGrandchildren, ...grandchildren];
         }
       }
+
+      console.debug('Fetched grandchildren systems', { count: allGrandchildren.length });
       
       // Fetch interfaces between all systems (current, children, and grandchildren)
       const allSystemIds = [
@@ -111,6 +165,8 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
       if (interfacesError) {
         console.error('Error fetching interfaces:', interfacesError);
       }
+
+      console.debug('Fetched interfaces', { count: interfaces?.length || 0 });
       
       // Create nodes and edges
       const systemNodes: Node<{ label: string; category: string; type: string; }>[] = [];
@@ -124,7 +180,7 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
           category: systemData.category,
           type: 'current'
         },
-        position: { x: 250, y: 250 },
+        position: { x: 0, y: 0 }, // Will be replaced by auto-layout
         style: {
           background: '#3ECF8E',
           color: 'white',
@@ -135,15 +191,8 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
         },
       } as Node<{ label: string; category: string; type: string; }>);
       
-      // Create nodes for child systems with positions in a circle around the center
-      const childRadius = 200;
-      const childAngleStep = (2 * Math.PI) / Math.max(childSystems.length, 1);
-      
-      childSystems.forEach((system, index) => {
-        const angle = index * childAngleStep;
-        const x = 250 + childRadius * Math.cos(angle);
-        const y = 250 + childRadius * Math.sin(angle);
-        
+      // Create nodes for child systems
+      childSystems.forEach((system) => {
         systemNodes.push({
           id: system.id,
           data: { 
@@ -151,7 +200,7 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
             category: system.category,
             type: 'child'
           },
-          position: { x, y },
+          position: { x: 0, y: 0 }, // Will be replaced by auto-layout
           style: {
             background: '#0070f3',
             color: 'white',
@@ -172,56 +221,39 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
       });
       
       // Create nodes for grandchildren systems
-      // Position them in small circles around their parent nodes
       allGrandchildren.forEach((system) => {
         // Find parent (which child this grandchild belongs to)
         const parentIndex = childSystems.findIndex(child => child.id === system.parent_id);
         
         if (parentIndex !== -1) {
           const parentSystem = childSystems[parentIndex];
-          const parentNode = systemNodes.find(node => node.id === parentSystem.id);
           
-          if (parentNode) {
-            // Get count of grandchildren for this parent to calculate positioning
-            const siblingCount = allGrandchildren.filter(g => g.parent_id === parentSystem.id).length;
-            const siblingIndex = allGrandchildren.filter(g => g.parent_id === parentSystem.id).findIndex(g => g.id === system.id);
-            
-            // Calculate position in a smaller circle around the parent
-            const grandchildRadius = 100;
-            const grandchildAngleStep = (2 * Math.PI) / Math.max(siblingCount, 1);
-            const angle = siblingIndex * grandchildAngleStep;
-            
-            // Position relative to parent node
-            const x = parentNode.position.x + grandchildRadius * Math.cos(angle);
-            const y = parentNode.position.y + grandchildRadius * Math.sin(angle);
-            
-            systemNodes.push({
-              id: system.id,
-              data: { 
-                label: system.name,
-                category: system.category,
-                type: 'grandchild'
-              },
-              position: { x, y },
-              style: {
-                background: '#6b21a8',
-                color: 'white',
-                border: '1px solid #4a1072',
-                borderRadius: '8px',
-                padding: '10px',
-                width: 130,
-                fontSize: '0.9em',
-              },
-            });
-            
-            // Add edge from parent to this grandchild
-            systemEdges.push({
-              id: `e-parent-${system.id}`,
-              source: parentSystem.id,
-              target: system.id,
-              style: { stroke: '#6b21a8', strokeWidth: 1, strokeDasharray: '5,5' },
-            });
-          }
+          systemNodes.push({
+            id: system.id,
+            data: { 
+              label: system.name,
+              category: system.category,
+              type: 'grandchild'
+            },
+            position: { x: 0, y: 0 }, // Will be replaced by auto-layout
+            style: {
+              background: '#6b21a8',
+              color: 'white',
+              border: '1px solid #4a1072',
+              borderRadius: '8px',
+              padding: '10px',
+              width: 130,
+              fontSize: '0.9em',
+            },
+          });
+          
+          // Add edge from parent to this grandchild
+          systemEdges.push({
+            id: `e-parent-${system.id}`,
+            source: parentSystem.id,
+            target: system.id,
+            style: { stroke: '#6b21a8', strokeWidth: 1, strokeDasharray: '5,5' },
+          });
         }
       });
       
@@ -248,8 +280,26 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
         });
       }
       
-      setNodes(systemNodes);
-      setEdges(systemEdges);
+      console.debug('Created graph elements', { 
+        nodeCount: systemNodes.length, 
+        edgeCount: systemEdges.length 
+      });
+
+      // Apply auto-layout using dagre
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+        systemNodes,
+        systemEdges
+      );
+
+      console.debug('Applied auto-layout to graph', {
+        originalNodeCount: systemNodes.length,
+        layoutedNodeCount: layoutedNodes.length,
+        originalEdgeCount: systemEdges.length,
+        layoutedEdgeCount: layoutedEdges.length
+      });
+      
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
     } catch (error) {
       console.error('Error in fetchSystemData:', error);
     } finally {
@@ -258,6 +308,7 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
   }, [systemId, setNodes, setEdges]);
 
   useEffect(() => {
+    console.debug('SystemGraph component mounted or systemId changed', { systemId });
     fetchSystemData();
   }, [fetchSystemData]);
 
@@ -301,7 +352,13 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
   // Handle node click - navigate to the selected subsystem
   const onNodeClick = useCallback(
     (event: React.MouseEvent, node: Node<{ label: string; category: string; type: string }>) => {
+      console.debug('Node clicked', { nodeId: node.id, nodeLabel: node.data.label });
       if (node.id !== systemId && onSystemSelect) {
+        console.debug('Navigating to new system', { 
+          fromSystem: systemId, 
+          toSystem: node.id, 
+          nodeLabel: node.data.label 
+        });
         onSystemSelect(node.id, node.data.label);
       }
     },
@@ -311,7 +368,7 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
   // Generate a legend for the graph
   const renderLegend = () => {
     return (
-      <div className="bg-white p-2 rounded shadow-md text-xs">
+      <div className="p-2 rounded shadow-md text-xs">
         <h4 className="font-bold mb-1">Legend:</h4>
         <div className="flex items-center mb-1">
           <div className="w-3 h-3 bg-[#3ECF8E] mr-1 rounded-sm"></div>
@@ -334,7 +391,7 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
   }
 
   return (
-    <div style={{ width: '100%', height: '600px' }}>
+    <div style={{ width: '100%', height: '90%' }}>
       <div className="p-3 border-b">
         <h2 className="text-xl font-bold">{currentSystem?.name || 'System Graph'}</h2>
         <p className="text-sm italic">{currentSystem?.category || ''}</p>
@@ -351,11 +408,28 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
         fitView
       >
         <Controls />
-        <MiniMap />
         <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
         
         <Panel position="top-right" className="mr-12 mt-12">
           {renderLegend()}
+        </Panel>
+        
+        {/* Layout Controls Panel */}
+        <Panel position="top-left" className="ml-4 mt-4">
+          <button
+            onClick={() => {
+              console.debug('Recalculating auto-layout');
+              const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+                nodes,
+                edges
+              );
+              setNodes([...layoutedNodes]);
+              setEdges([...layoutedEdges]);
+            }}
+            className="bg-blue-500 px-3 py-1 rounded text-sm shadow hover:bg-gray-100"
+          >
+            Reset Layout
+          </button>
         </Panel>
       </ReactFlow>
     </div>

@@ -32,13 +32,13 @@ interface BreadcrumbsProps {
 
 const Breadcrumbs = ({ path, onNavigate }: BreadcrumbsProps) => {
   return (
-    <div className="flex items-center mb-4 text-sm">
+    <div className="flex items-center mb-2 text-sm overflow-x-auto whitespace-nowrap py-1">
       {path.map((item, index) => (
         <div key={item.id} className="flex items-center">
-          {index > 0 && <span className="mx-2">&gt;</span>}
+          {index > 0 && <span className="mx-1 text-gray-400">/</span>}
           <button 
             onClick={() => onNavigate(item.id)}
-            className="hover:underline text-blue-500"
+            className="hover:underline text-blue-500 px-1"
           >
             {item.name}
           </button>
@@ -49,6 +49,8 @@ const Breadcrumbs = ({ path, onNavigate }: BreadcrumbsProps) => {
 };
 
 export default function Home() {
+  console.debug('Rendering Home component');
+  
   // State for current system and navigation path
   const [currentSystemId, setCurrentSystemId] = useState("00000000-0000-0000-0000-000000000001");
   const [navigationPath, setNavigationPath] = useState([
@@ -61,6 +63,7 @@ export default function Home() {
   }
 
   const handleSystemSelect: SystemSelectHandler = (systemId, systemName) => {
+    console.debug('System selected', { systemId, systemName });
     setCurrentSystemId(systemId);
     
     // Check if we're navigating to a system already in the path
@@ -81,6 +84,7 @@ export default function Home() {
   }
 
   const handleBreadcrumbNavigate: BreadcrumbNavigateHandler = (systemId) => {
+    console.debug('Breadcrumb navigation', { systemId });
     const existingIndex = navigationPath.findIndex(item => item.id === systemId);
     if (existingIndex >= 0) {
       setCurrentSystemId(systemId);
@@ -89,8 +93,8 @@ export default function Home() {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">System Navigator</h1>
+    <div className="container mx-auto p-2 max-w-7xl">
+      <h1 className="text-xl font-bold">System Navigator</h1>
       
       {/* Breadcrumb navigation */}
       <Breadcrumbs 
@@ -98,9 +102,9 @@ export default function Home() {
         onNavigate={handleBreadcrumbNavigate} 
       />
       
-      <div className="container flex flex-row justify-between">
+      <div className="flex flex-col md:flex-row gap-3">
         {/* Left column - Graph view */}
-        <div className="border rounded-lg overflow-hidden w-[49%]">
+        <div className="md:w-1/2 border rounded-lg overflow-hidden shadow-sm h-[730px]">
           <SystemGraph 
             systemId={currentSystemId} 
             onSystemSelect={handleSystemSelect} 
@@ -108,9 +112,9 @@ export default function Home() {
         </div>
         
         {/* Right column - Details and interfaces */}
-        <div className="w-[49%] flex flex-col space-y-4">
+        <div className="md:w-1/2 flex flex-col space-y-3">
           {/* System details section */}
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-hidden shadow-sm h-1/2">
             <SystemDetails 
               systemId={currentSystemId} 
               onSystemSelect={handleSystemSelect}
@@ -118,7 +122,7 @@ export default function Home() {
           </div>
           
           {/* Interface panel section */}
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-hidden shadow-sm h-1/2">
             <InterfacePanel 
               systemId={currentSystemId} 
             />

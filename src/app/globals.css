@@ -3,11 +3,26 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --primary: #0070f3;
+  --primary-hover: #0050a3;
+  --primary-light: #e1edff;
+  --secondary: #3ECF8E;
+  --secondary-hover: #107969;
+  --accent: #6b21a8;
+  --accent-hover: #4a1072;
+  --gray-light: #f5f5f5;
+  --gray-medium: #e0e0e0;
+  --gray-dark: #666666;
+  --error: #ef4444;
+  --error-hover: #b91c1c;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -16,11 +31,128 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --primary-light: #0c1f36;
+    --gray-light: #161616;
+    --gray-medium: #303030;
+    --gray-dark: #909090;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Custom styles for the flow diagram */
+.react-flow__node {
+  transition: all 0.2s ease;
+}
+
+.react-flow__node:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.react-flow__edge {
+  transition: stroke-width 0.2s ease;
+}
+
+.react-flow__edge:hover {
+  stroke-width: 3px !important;
+}
+
+.react-flow__controls {
+  background: var(--background);
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.react-flow__minimap {
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gray-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gray-dark);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Modal styling */
+.modal-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Button styles */
+button {
+  transition: all 0.2s ease;
+}
+
+/* Table styles */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th {
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+td, th {
+  border-bottom: 1px solid var(--gray-medium);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+/* Make sure the interface tables have reasonable column widths */
+.interface-table th:nth-child(1),
+.interface-table th:nth-child(2) {
+  width: 30%;
+}
+
+.interface-table th:nth-child(3) {
+  width: 20%;
+}
+
+.interface-table th:nth-child(4) {
+  width: 15%;
+}
+
+.interface-table th:nth-child(5) {
+  width: 15%;
 }
