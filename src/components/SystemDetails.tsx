@@ -1,6 +1,12 @@
 'use client';
 import { useCallback, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { 
+    createSystemWithTransaction, 
+    updateSystemWithTransaction, 
+    deleteSystemWithTransaction,
+    getRevisionHistory
+  } from '@/lib/supabase';
 
 interface SystemDetailsProps {
   systemId: string;
@@ -123,26 +129,22 @@ export default function SystemDetails(props: SystemDetailsProps) {
   const handleAddSystem = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newSystem = {
-        name: formData.name,
-        category: formData.category,
-        parent_id: props.systemId
-      };
-
-      const { data, error } = await supabase
-        .from('systems')
-        .insert([newSystem])
-        .select();
-
-      if (error) {
-        console.error('Error adding system:', error);
-      } else {
-        // Reset form and close modal
-        setFormData({ name: '', category: '' });
-        setIsAddModalOpen(false);
-        // Fetch updated list
-        fetchDescendants();
-      }
+      console.debug('Adding new system', formData);
+      
+      const newSystemId = await createSystemWithTransaction(
+        formData.name,
+        formData.category,
+        props.systemId // Parent ID
+      );
+      
+      console.debug('System added successfully', { newSystemId });
+      
+      // Reset form and close modal
+      setFormData({ name: '', category: '' });
+      setIsAddModalOpen(false);
+      
+      // Fetch updated list
+      fetchDescendants();
     } catch (error) {
       console.error('Unexpected error:', error);
     }
@@ -152,27 +154,26 @@ export default function SystemDetails(props: SystemDetailsProps) {
   const handleEditSystem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentSystem) return;
-
+  
     try {
-      const { data, error } = await supabase
-        .from('systems')
-        .update({
-          name: formData.name,
-          category: formData.category
-        })
-        .eq('id', currentSystem.id)
-        .select();
-
-      if (error) {
-        console.error('Error updating system:', error);
-      } else {
-        // Reset form and close modal
-        setCurrentSystem(null);
-        setFormData({ name: '', category: '' });
-        setIsEditModalOpen(false);
-        // Fetch updated list
-        fetchDescendants();
-      }
+      console.debug('Editing system', { id: currentSystem.id, formData });
+      
+      const updatedSystemData = await updateSystemWithTransaction(
+        currentSystem.id,
+        formData.name,
+        formData.category
+      );
+      
+      console.debug('System updated successfully', updatedSystemData);
+      
+      // Reset form and close modal
+      setCurrentSystem(null);
+      setFormData({ name: '', category: '' });
+      setIsEditModalOpen(false);
+      
+      // Fetch updated data
+      fetchCurrentSystem();
+      fetchDescendants();
     } catch (error) {
       console.error('Unexpected error:', error);
     }
@@ -180,19 +181,16 @@ export default function SystemDetails(props: SystemDetailsProps) {
 
   // Delete system
   const handleDeleteSystem = async (id: string) => {
-    if (confirm('Are you sure you want to delete this system?')) {
+    if (confirm('Are you sure you want to delete this system? This action cannot be undone.')) {
       try {
-        const { error } = await supabase
-          .from('systems')
-          .delete()
-          .eq('id', id);
-
-        if (error) {
-          console.error('Error deleting system:', error);
-        } else {
-          // Fetch updated list
-          fetchDescendants();
-        }
+        console.debug('Deleting system', { id });
+        
+        await deleteSystemWithTransaction(id);
+        
+        console.debug('System deleted successfully');
+        
+        // Fetch updated list
+        fetchDescendants();
       } catch (error) {
         console.error('Unexpected error:', error);
       }

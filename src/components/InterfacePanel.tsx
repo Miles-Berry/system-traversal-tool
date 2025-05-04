@@ -1,6 +1,12 @@
 'use client';
 import { useCallback, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { 
+  createInterfaceWithTransaction, 
+  updateInterfaceWithTransaction, 
+  deleteInterfaceWithTransaction,
+  getRevisionHistory
+} from '@/lib/supabase';
 
 interface InterfacePanelProps {
   systemId: string;
@@ -164,27 +170,23 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
   const handleAddInterface = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newInterface = {
-        system1_id: formData.system1_id,
-        system2_id: formData.system2_id,
-        connection: formData.connection,
-        directional: formData.directional
-      };
-
-      const { data, error } = await supabase
-        .from('interfaces')
-        .insert([newInterface])
-        .select();
-
-      if (error) {
-        console.error('Error adding interface:', error);
-      } else {
-        // Reset form and close modal
-        setFormData({ system1_id: '', system2_id: '', connection: '', directional: 0 });
-        setIsAddModalOpen(false);
-        // Fetch updated list
-        fetchInterfaces();
-      }
+      console.debug('Adding new interface', formData);
+      
+      const newInterfaceId = await createInterfaceWithTransaction(
+        formData.system1_id,
+        formData.system2_id,
+        formData.connection,
+        formData.directional
+      );
+      
+      console.debug('Interface added successfully', { newInterfaceId });
+      
+      // Reset form and close modal
+      setFormData({ system1_id: '', system2_id: '', connection: '', directional: 0 });
+      setIsAddModalOpen(false);
+      
+      // Fetch updated list
+      fetchInterfaces();
     } catch (error) {
       console.error('Unexpected error:', error);
     }
@@ -194,29 +196,27 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
   const handleEditInterface = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentInterface) return;
-
+  
     try {
-      const { data, error } = await supabase
-        .from('interfaces')
-        .update({
-          system1_id: formData.system1_id,
-          system2_id: formData.system2_id,
-          connection: formData.connection,
-          directional: formData.directional
-        })
-        .eq('id', currentInterface.id)
-        .select();
-
-      if (error) {
-        console.error('Error updating interface:', error);
-      } else {
-        // Reset form and close modal
-        setCurrentInterface(null);
-        setFormData({ system1_id: '', system2_id: '', connection: '', directional: 0 });
-        setIsEditModalOpen(false);
-        // Fetch updated list
-        fetchInterfaces();
-      }
+      console.debug('Editing interface', { id: currentInterface.id, formData });
+      
+      const updatedInterfaceData = await updateInterfaceWithTransaction(
+        currentInterface.id,
+        formData.system1_id,
+        formData.system2_id,
+        formData.connection,
+        formData.directional
+      );
+      
+      console.debug('Interface updated successfully', updatedInterfaceData);
+      
+      // Reset form and close modal
+      setCurrentInterface(null);
+      setFormData({ system1_id: '', system2_id: '', connection: '', directional: 0 });
+      setIsEditModalOpen(false);
+      
+      // Fetch updated list
+      fetchInterfaces();
     } catch (error) {
       console.error('Unexpected error:', error);
     }
@@ -224,25 +224,22 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
 
   // Delete interface
   const handleDeleteInterface = async (id: string) => {
-    if (confirm('Are you sure you want to delete this interface?')) {
+    if (confirm('Are you sure you want to delete this interface? This action cannot be undone.')) {
       try {
-        const { error } = await supabase
-          .from('interfaces')
-          .delete()
-          .eq('id', id);
-
-        if (error) {
-          console.error('Error deleting interface:', error);
-        } else {
-          // Fetch updated list
-          fetchInterfaces();
-        }
+        console.debug('Deleting interface', { id });
+        
+        await deleteInterfaceWithTransaction(id);
+        
+        console.debug('Interface deleted successfully');
+        
+        // Fetch updated list
+        fetchInterfaces();
       } catch (error) {
         console.error('Unexpected error:', error);
       }
     }
   };
-
+  
   // Open edit modal with interface data
   const openEditModal = (iface: Interface) => {
     setCurrentInterface(iface);

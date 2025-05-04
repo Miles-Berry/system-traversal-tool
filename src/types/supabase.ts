@@ -54,6 +54,39 @@ export type Database = {
           },
         ]
       }
+      revisions: {
+        Row: {
+          created_at: string
+          created_by: string
+          entity_id: string
+          entity_type: string
+          id: string
+          new_data: Json | null
+          operation: string
+          previous_data: Json | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          new_data?: Json | null
+          operation: string
+          previous_data?: Json | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          new_data?: Json | null
+          operation?: string
+          previous_data?: Json | null
+        }
+        Relationships: []
+      }
       systems: {
         Row: {
           category: string
@@ -94,7 +127,53 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_interface_with_history: {
+        Args: {
+          interface_system1_id: string
+          interface_system2_id: string
+          interface_connection: string
+          interface_directional?: number
+        }
+        Returns: string
+      }
+      create_system_with_history: {
+        Args: {
+          system_name: string
+          system_category: string
+          system_parent_id?: string
+        }
+        Returns: string
+      }
+      delete_interface_with_history: {
+        Args: { interface_id: string }
+        Returns: boolean
+      }
+      delete_system_with_history: {
+        Args: { system_id: string }
+        Returns: boolean
+      }
+      restore_revision: {
+        Args: { revision_id: string }
+        Returns: Json
+      }
+      update_interface_with_history: {
+        Args: {
+          interface_id: string
+          interface_system1_id: string
+          interface_system2_id: string
+          interface_connection: string
+          interface_directional: number
+        }
+        Returns: Json
+      }
+      update_system_with_history: {
+        Args: {
+          system_id: string
+          system_name: string
+          system_category: string
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

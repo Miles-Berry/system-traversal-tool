@@ -17,7 +17,8 @@ import {
   BackgroundVariant,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { supabase } from '@/lib/supabase';
+import { supabase, createInterfaceWithTransaction } from '@/lib/supabase';
+
 
 interface SystemGraphProps {
   systemId: string;
@@ -262,8 +263,39 @@ export default function SystemGraph({ systemId, onSystemSelect }: SystemGraphPro
 
   // Handle connections between nodes
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    (params: Connection) => {
+      console.debug('Connection created between nodes', params);
+      
+      // Create a new interface in the database when a connection is made
+      const createInterface = async () => {
+        try {
+          const newInterfaceId = await createInterfaceWithTransaction(
+            params.source as string,
+            params.target as string,
+            'New Connection', // Default connection name
+            0 // Default to bidirectional
+          );
+          
+          console.debug('Interface created successfully', { newInterfaceId });
+          
+          // Reload graph after creating the interface
+          fetchSystemData();
+        } catch (error) {
+          console.error('Error in createInterface:', error);
+        }
+      };
+      
+      // If a connection is made in the UI, create the interface
+      createInterface();
+      
+      // Also update the local state for immediate feedback
+      setEdges((eds) => addEdge({
+        ...params,
+        animated: true,
+        style: { stroke: '#333', strokeWidth: 2, strokeDasharray: '3,3' },
+      }, eds));
+    },
+    [setEdges, fetchSystemData]
   );
 
   // Handle node click - navigate to the selected subsystem
