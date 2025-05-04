@@ -7,6 +7,7 @@ import {
   deleteInterfaceWithTransaction,
   getRevisionHistory
 } from '@/lib/supabase';
+import RevisionHistory from './RevisionHistory';
 
 interface InterfacePanelProps {
   systemId: string;
@@ -39,6 +40,7 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
   const [grandchildren, setGrandchildren] = useState<System[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [currentInterface, setCurrentInterface] = useState<Interface | null>(null);
   const [activeTab, setActiveTab] = useState<'direct' | 'children' | 'grandchildren'>('direct');
   const [formData, setFormData] = useState({
@@ -269,6 +271,13 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
     setIsEditModalOpen(true);
   };
 
+  // Open history modal
+  const openHistoryModal = (iface: Interface) => {
+    console.debug('Opening history modal for interface', { id: iface.id });
+    setCurrentInterface(iface);
+    setIsHistoryModalOpen(true);
+  };
+
   // Get all available systems for dropdowns
   const getAvailableSystems = () => {
     const connectedExternalSystems: System[] = [];
@@ -383,6 +392,12 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
               </td>
               <td className="px-2 py-2 whitespace-nowrap text-right">
                 <div className="flex gap-1 justify-end">
+                  <button
+                    onClick={() => openHistoryModal(iface)}
+                    className="text-xs font-medium border rounded-sm bg-gray-500 text-white hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:ring-opacity-50 px-1.5 py-0.5"
+                  >
+                    History
+                  </button>
                   <button
                     onClick={() => openEditModal(iface)}
                     className="text-xs font-medium border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:ring-opacity-50 px-1.5 py-0.5"
@@ -637,6 +652,19 @@ export default function InterfacePanel({ systemId }: InterfacePanelProps) {
             </form>
           </div>
         </div>
+      )}
+      
+      {/* Revision History Modal */}
+      {isHistoryModalOpen && currentInterface && (
+        <RevisionHistory
+          entityType="interface"
+          entityId={currentInterface.id}
+          onClose={() => {
+            setCurrentInterface(null);
+            setIsHistoryModalOpen(false);
+          }}
+          onRestore={() => fetchInterfaces()}
+        />
       )}
     </div>
   );

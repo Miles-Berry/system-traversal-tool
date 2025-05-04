@@ -7,6 +7,7 @@ import {
     deleteSystemWithTransaction,
     getRevisionHistory
   } from '@/lib/supabase';
+import RevisionHistory from './RevisionHistory';
 
 interface SystemDetailsProps {
   systemId: string;
@@ -31,6 +32,7 @@ export default function SystemDetails(props: SystemDetailsProps) {
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [selectedView, setSelectedView] = useState<'direct' | 'all'>('direct');
   const [formData, setFormData] = useState({
     name: '',
@@ -173,7 +175,6 @@ export default function SystemDetails(props: SystemDetailsProps) {
       console.debug('System updated successfully', updatedSystemData);
       
       // Reset form and close modal
-      setCurrentSystem(null);
       setFormData({ name: '', category: '' });
       setIsEditModalOpen(false);
       
@@ -270,6 +271,16 @@ export default function SystemDetails(props: SystemDetailsProps) {
       </div>
       <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
         <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setCurrentSystem(system);
+            setIsHistoryModalOpen(true);
+          }}
+          className="text-xs font-medium border rounded-sm bg-gray-500 text-white hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-gray-500 focus:ring-opacity-50 px-1.5 py-0.5"
+        >
+          History
+        </button>
+        <button
           onClick={(e) => openEditModal(system, e)}
           className="text-xs font-medium border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:ring-opacity-50 px-1.5 py-0.5"
         >
@@ -299,14 +310,24 @@ export default function SystemDetails(props: SystemDetailsProps) {
             {currentSystem?.category || 'Category'}
           </h4>
         </div>
-        {currentSystem?.parent_id && (
-          <button 
-            onClick={handleGoToParent}
-            className="text-xs border rounded-sm hover:bg-gray-300 px-2 py-1"
-          >
-            Go to Parent
-          </button>
-        )}
+        <div className="flex gap-2">
+          {currentSystem && (
+            <button 
+              onClick={() => setIsHistoryModalOpen(true)}
+              className="text-xs border rounded-sm bg-gray-500 text-white hover:bg-gray-700 px-2 py-1"
+            >
+              View History
+            </button>
+          )}
+          {currentSystem?.parent_id && (
+            <button 
+              onClick={handleGoToParent}
+              className="text-xs border rounded-sm hover:bg-gray-300 px-2 py-1"
+            >
+              Go to Parent
+            </button>
+          )}
+        </div>
       </div>
       
       <div className="flex justify-between items-center px-2 py-1">
@@ -456,6 +477,19 @@ export default function SystemDetails(props: SystemDetailsProps) {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Revision History Modal */}
+      {isHistoryModalOpen && currentSystem && (
+        <RevisionHistory
+          entityType="system"
+          entityId={currentSystem.id}
+          onClose={() => setIsHistoryModalOpen(false)}
+          onRestore={() => {
+            fetchCurrentSystem();
+            fetchDescendants();
+          }}
+        />
       )}
     </div>
   );
