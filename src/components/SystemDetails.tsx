@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 
 interface SystemDetailsProps {
   systemId: string;
+  onSystemSelect?: (id: string, name: string) => void;
 }
 
 interface System {
@@ -12,20 +13,39 @@ interface System {
   category: string;
   parent_id?: string | null;
   created_at: string | null;
-  // Add other fields as needed
 }
 
 export default function SystemDetails(props: SystemDetailsProps) {
   const [systems, setSystems] = useState<System[] | null>(null);
+  const [currentSystem, setCurrentSystem] = useState<System | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [currentSystem, setCurrentSystem] = useState<System | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     category: ''
   });
 
+  // Fetch current system details
+  const fetchCurrentSystem = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('systems')
+        .select('*')
+        .eq('id', props.systemId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching current system:', error);
+      } else {
+        setCurrentSystem(data);
+      }
+    } catch (error) {
+      console.error('Unexpected error:', error);
+    }
+  }, [props.systemId]);
+
+  // Fetch subsystems
   const fetchSystems = useCallback(async () => {
     try {
       setLoading(true);
@@ -48,8 +68,9 @@ export default function SystemDetails(props: SystemDetailsProps) {
   }, [props.systemId]);
 
   useEffect(() => {
+    fetchCurrentSystem();
     fetchSystems();
-  }, [fetchSystems]);
+  }, [fetchCurrentSystem, fetchSystems]);
 
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,8 +161,37 @@ export default function SystemDetails(props: SystemDetailsProps) {
     }
   };
 
+  // Handle system click for navigation
+  const handleSystemClick = (system: System) => {
+    if (props.onSystemSelect) {
+      props.onSystemSelect(system.id, system.name);
+    }
+  };
+
+  // Go back to parent system
+  const handleGoToParent = async () => {
+    if (currentSystem?.parent_id && props.onSystemSelect) {
+      try {
+        const { data, error } = await supabase
+          .from('systems')
+          .select('*')
+          .eq('id', currentSystem.parent_id)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching parent system:', error);
+        } else {
+          props.onSystemSelect(data.id, data.name);
+        }
+      } catch (error) {
+        console.error('Unexpected error:', error);
+      }
+    }
+  };
+
   // Open edit modal with system data
-  const openEditModal = (system: System) => {
+  const openEditModal = (system: System, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering the row click
     setCurrentSystem(system);
     setFormData({
       name: system.name,
@@ -152,11 +202,21 @@ export default function SystemDetails(props: SystemDetailsProps) {
 
   return (
     <div className="w-full h-[350px]">
-      <h2 className="mx-3 mt-3 text-xl font-bold">
-        System Details
-      </h2>
+      <div className="flex justify-between items-center">
+        <h2 className="mx-3 mt-3 text-xl font-bold">
+          {currentSystem?.name || 'System Details'}
+        </h2>
+        {currentSystem?.parent_id && (
+          <button 
+            onClick={handleGoToParent}
+            className="mx-3 mt-3 text-sm border rounded-sm bg-gray-200 hover:bg-gray-300 px-2 py-1"
+          >
+            Go to Parent
+          </button>
+        )}
+      </div>
       <h4 className="mx-3 text-md italic mt-0 mb-3">
-        Manage Subsystems
+        {currentSystem?.category || 'Category'}
       </h4>
       <div className="container flex flex-row justify-between">
         <h3 className="mx-3 text-lg font-bold">
@@ -173,23 +233,30 @@ export default function SystemDetails(props: SystemDetailsProps) {
         {loading ? (
           <li className="p-2">Loading...</li>
         ) : !systems?.length ? (
-          <li className="p-2">No systems found</li>
+          <li className="p-2">No subsystems found</li>
         ) : (
-          systems.map((system, index) => (
-            <li key={system.id} className="flex justify-between items-center p-2 border-b last:border-b-0">
+          systems.map((system) => (
+            <li 
+              key={system.id} 
+              className="flex justify-between items-center p-2 border-b last:border-b-0 hover:bg-gray-100 cursor-pointer"
+              onClick={() => handleSystemClick(system)}
+            >
               <div className="flex flex-col">
                 <span className="text-md font-bold">{system.name}</span>
                 <span className="text-sm italic">{system.category}</span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                 <button
-                  onClick={() => openEditModal(system)}
+                  onClick={(e) => openEditModal(system, e)}
                   className="text-sm font-bold border rounded-sm bg-blue-500 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 px-2 py-1"
                 >
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDeleteSystem(system.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteSystem(system.id);
+                  }}
                   className="text-sm font-bold border rounded-sm bg-red-500 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 px-2 py-1"
                 >
                   Delete
